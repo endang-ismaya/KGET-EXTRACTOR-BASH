@@ -1,0 +1,187 @@
+#!/bin/bash
+
+# //////////////////////////////////////////////////////////////////////// #
+# Application Name	: srtparse
+# Version						: v.1.0.1
+# Author 						: endang.ismaya@gmail.com
+# Date 							: Feb 18, 2015
+# Location 					: SanFrancisco, Indonesia
+# Comment						:	Compile srt stuff
+# //////////////////////////////////////////////////////////////////////// #
+
+## Usage Function to send the information how to use the tool
+
+usage()
+{
+	cat <<END
+Usage : ./srtparse [-f filename] [-h] [-v]
+
+ -f : the name of file (site listed)
+ -h : show this help message
+ -v : show this tools version		
+
+Examples:
+ 
+ ./srtparse -f sitelist.txt
+ 
+END
+}
+
+showversion()
+{
+cat <<END
+
+# //// #
+# Application Name  : srtparse
+# Version           : v.1.0.1
+# //// #
+
+END
+}
+
+## error catch
+error ()
+{
+	## echo "Error: $1"
+	printf '\e[1;31m%s\e[0m\n\n' "Error: $1"
+	usage
+	exit $2
+} >&2
+
+## drawline function
+drawline ()
+{
+
+dt=`date '+%m/%d/%Y %H:%M:%S'`
+	
+	len="${#1} + 26"
+	
+	declare line=""
+	declare char="-"
+	for (( i=0; i<$len ; i++ )); do
+		line="${line}${char}"
+	done
+	printf "%s\n" "$line"
+	
+	printf '| \e[1;32m%s : %s\e[0m |\n' "$1" "$dt"
+	
+	line=""
+	char="-"
+	for (( i=0; i<$len ; i++ )); do
+		line="${line}${char}"
+	done
+	printf "%s\n" "$line"
+	
+}
+
+##// checking if no argument (filename)
+[[ $# -lt 1 ]] && { printf '\e[1;31m%s\e[0m\n\n' "Missing an argument." >&2; usage ; exit 1; }
+
+while getopts ":f:avhp" opt; do
+	case $opt in
+		f)
+			filenameopt="${OPTARG}"
+			;;
+		h)
+			usage
+			exit 0
+			;;
+		v)
+			showversion
+			exit 0
+			;;
+		:)
+			error "Option -${OPTARG} is missing an argument" 2
+			;;
+		\?)
+			error "Unknown option: -${OPTARG}" 3 
+			;;
+ 
+ 	esac
+ 	
+done   
+
+shift $((OPTIND -1))
+
+## variable declaration
+filename=${filenameopt}
+declare -ir target=$(( ($RANDOM % 1000000) + 1 ))
+declare -ir target2=$(( ($RANDOM % 1000000) + 1 ))
+date=`date "+%y%m%d%H%M%S"`
+declare DIRECTORY="SRT_${USER}_${date}_${target}${target2}"
+#
+sitelistname=""
+#declare DIRTEST="SRTFILE_${USER}_${date}_${target}${target2}"
+##----------------------------------------------------------
+
+if [[ ! -e $filename ]]; then
+	echo "File ${filename} is not exists" >&2
+	exit 1
+fi
+
+while read -r || [[ $REPLY ]]; do
+		sitelistname="${sitelistname}_${REPLY}"
+done < "$filename"
+
+declare DIRTEST="SRTFILE_${USER}${sitelistname}_${date}"
+
+##// check the existance of the directory and filename
+if [ ! -d "$DIRTEST" ]; then
+  mkdir -p "$DIRTEST"
+fi
+
+## filename="sitelist.txt"
+## processing sign
+drawline "Start "
+##-----------------
+
+##-> amosbatch filename with paralel 20 sites and timeout 120
+## nohup /opt/ericsson/amos/moshell/mobatch -p 5 -t 120 ${filename} /home/dd622f/newSRT/SRT_CHECK_CMD ${DIRECTORY}
+nohup /opt/ericsson/amos/moshell/mobatch -p 5 -t 120 ${filename} /home/ei400b/00_Tools/srt_lte/SRT_CHECK_CMD ${DIRECTORY}
+printf '\t\e[1;34m%s\e[0m\n' "- amosbatch finish..."
+## cd ${DIRTEST} 
+## copy file to DIRTEST	
+	for file in *.log ; do
+    mv "$file" "${DIRTEST}"
+	done
+
+rm -R ${DIRECTORY}
+cd ${DIRTEST}
+##------------------------------------------------------------------------------------------
+
+## Create folder in each sitename
+while read -r || [[ $REPLY ]]; do
+export eNBName="$REPLY"
+
+	for file in KGET_SRT_${REPLY}*; do
+	## /home/dd622f/newSRT/kgetextract -f ${file} 
+	/home/ei400b/00_Tools/srt_lte/kgetextract -f ${file} 
+	done
+	
+	for file in *${REPLY}*.*; do
+##    dir=${file%%.*}
+##    mkdir -p "${REPLY}"
+    mv "$file" "${eNBName}_elementId"
+	done
+	
+done < "../$filename"
+#--------------------------------------
+
+## zip folder
+printf '\t\e[1;34m%s\e[0m\n' "- compressing file..."
+cd ..
+zip -qr ${DIRTEST}.zip ${DIRTEST}
+rm -R ${DIRTEST}
+#-------------------------------
+
+## processing sign
+drawline "Completed "
+##-----------------
+
+exit 0
+
+# /////////////////////////////////////////////////////////////////////////// #
+# Revision.History
+# v.1.0.0							-> Feb 18, 2015 Beta Version
+#	v.1.0.1							-> Mar 28, 2015 Change SRT Dir Name to sitelist's name
+# ////////////////////////////////////////////////////////////////////////// #

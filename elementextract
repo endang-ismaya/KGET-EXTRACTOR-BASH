@@ -1,0 +1,80 @@
+#!/usr/bin/bash
+
+# ///////////////////////////////////////////////////////////////////////////////// #
+# Application Name	: elementextract
+# Version						: v.1.0.5
+# Author 						: endang.ismaya@gmail.com
+# Date 							: Jan 23, 2015
+# Update						: Dec 28, 2015
+# Location 					: Walnut Creek, CA, USA
+# Comment						:	ManagedelementId extract to create siteDataId for SRT.Tools 
+# ///////////////////////////////////////////////////////////////////////////////// #
+
+usage ()
+{
+	cat <<END
+Usage:
+./elementextract [filename],[filename],[filename],[filename]
+ 
+ filename : filename or absolute path name to be proceed.
+END
+}
+
+## error catch
+error ()
+{
+	echo "Error: $1"
+	usage
+	exit $2
+} >&2
+
+##// checking if no argument (filename)
+[[ $# -ne 1 ]] && { echo "Missing arguments" >&2; usage ; exit 1; }
+
+datasitename="ManagedElement=1#site"
+datarbstype="Cabinet=1#productData.productName"
+datarbstype2="ManagedElement=1#productName"
+datadultype="Slot=1#productData.productName"
+datagps="TimingUnit=1,GpsSyncRef=1"
+datasitesrt="${eDIR}/SiteDataId"
+datapfs="Pfs=1#featureStatePfs"
+dataLppa="OptionalFeatureLicense=LppaBasedOtdoaSupport#featureState"
+dataCarAggregation="=CarrierAggregation#featureState"
+dataeNBId="ManagedElement=1,ENodeBFunction=1#eNBId"
+datapfs_l15b="=Pfs#featureState"
+
+filename1="$1"
+
+IFS="," read -a array <<< "$filename1"
+
+## echo "$1"
+
+for (( i=0; i < ${#array[@]} ; i++ )); do
+filename="${eDIR}/${array[i]}"
+## echo "${filename}"
+
+			##// check the existance of the filename
+			if [[ ! -e $filename ]]; then
+				echo "File ${filename} is not exist -> Should be OK if site is L15B" >&2
+				## exit 1
+			
+			else
+					while read -r || [[ $REPLY ]]; do
+						
+							if [[ $REPLY =~ $datasitename || $REPLY =~ $datarbstype2 || $REPLY =~ $datadultype || $REPLY =~ $datagps || $REPLY =~ $datapfs || $REPLY =~ $dataLppa || $REPLY =~ $dataeNBId || $REPLY =~ $dataCarAggregation || $REPLY =~ $datapfs_l15b ]] ; then
+									echo "$REPLY" >> "$datasitesrt"
+							fi
+		  		
+					done < "$filename"
+			fi
+done
+
+# /////////////////////////////////////////////////////////////////////////////////////////////////////////////// #
+# Revision.History
+# v.1.0.0							-> Jan 13, 2015 Beta Version
+# v.1.0.1							-> Jan 14, 2015 adding rbs type, ect
+# v.1.0.2							-> Feb 13, 2015 adding eNBId
+# v.1.0.3							-> Feb 16, 2015 adding CarrierAggregation
+# v.1.0.4							-> Feb 18, 2015 adding Directory
+# v.1.0.5							-> Dec 28, 2015 adding L15B Corrections, most of feature move to OptionalFeatureLicense
+# /////////////////////////////////////////////////////////////////////////////////////////////////////////////// #

@@ -1,0 +1,334 @@
+#!/usr/bin/bash
+
+# //////////////////////////////////////////////////////////////////////// #
+# Application Name	: kgetextractOSS
+# Version						: v.1.0.4
+# Author 						: endang.ismaya@gmail.com
+# Date 							: Jan 20, 2015
+# Location 					: San Francisco, USA
+# Comment						:	Kget extractor
+# //////////////////////////////////////////////////////////////////////// #
+
+## Usage Function to send the information how to use the tool
+
+usage()
+{
+	cat <<END
+Usage : ./kgetextract [-f filename] [-a] [-p] [-h] [-v]
+
+ -f : the name of the KGET file
+ -a : append the existing file in elementId's folder
+ -p : view the process while extracting the kget
+ -h : show this help message
+ -v : show this tools version		
+
+Examples:
+ 
+ ./kgetextract -f KGET_CCL01883.log
+ ./kgetextract -f KGET_CCL01883.log -a -v
+ ./kgetextract -pf KGET_CCL01883.log
+ 
+END
+}
+
+showversion()
+{
+cat <<END
+
+# //// #
+# Application Name  : kgetextractOSS
+# Version           : v.1.0.4
+# //// #
+
+END
+}
+
+## error catch
+error ()
+{
+	## echo "Error: $1"
+	printf '\e[1;31m%s\e[0m\n\n' "Error: $1"
+	usage
+	exit $2
+} >&2
+
+## drawline function
+drawline ()
+{
+
+dt=`date '+%m/%d/%Y %H:%M:%S'`
+	
+	len="${#1} + 26"
+	
+	declare line=""
+	declare char="-"
+	for (( i=0; i<$len ; i++ )); do
+		line="${line}${char}"
+	done
+	printf "%s\n" "$line"
+	
+	printf '| \e[1;32m%s : %s\e[0m |\n' "$1" "$dt"
+	
+	line=""
+	char="-"
+	for (( i=0; i<$len ; i++ )); do
+		line="${line}${char}"
+	done
+	printf "%s\n" "$line"
+	
+}
+
+declare view=""
+declare append=""
+declare DIRECTORY=""
+
+##// checking if no argument (filename)
+[[ $# -lt 1 ]] && { printf '\e[1;31m%s\e[0m\n\n' "Missing an argument." >&2; usage ; exit 1; }
+
+while getopts ":f:avhp" opt; do
+	case $opt in
+		f)
+			filenameopt="${OPTARG}"
+			;;
+		a)
+			append="yes"
+			;;
+		h)
+			usage
+			exit 0
+			;;
+		p)
+			view="yes"
+			;;
+		v)
+			showversion
+			exit 0
+			;;
+		:)
+			error "Option -${OPTARG} is missing an argument" 2
+			;;
+		\?)
+			error "Unknown option: -${OPTARG}" 3 
+			;;
+ 
+ 	esac
+ 	
+done   
+
+shift $((OPTIND -1))
+
+## [[ $1 ]] || { printf '\e[1;31m%s\e[0m\n\n' "Missing an argument for -f" >&2 ; usage >&2 ; exit 1; }
+           
+## set filename variable ^ constants random number
+filename=${filenameopt}
+DIRFOL=$(dirname "${filename}")
+DIRECTORY="${DIRFOL}/${eNBName}_elementId"
+## echo "$filename"
+## echo "$view"
+## echo "$append"
+## exit 1
+
+##// check the existance of the directory and filename
+if [ ! -d "$DIRECTORY" ]; then
+  mkdir -p "$DIRECTORY"
+fi
+
+if [[ ! -e $filename ]]; then
+	echo "File ${filename} is not exists" >&2
+	exit 1
+fi
+
+if [[ ! $append ]]; then
+	rm ${DIRECTORY}/*Id 2> /dev/null
+fi
+
+## regex declaration
+foundmo="^MO "
+foundid="^[[:upper:]].*Id   "
+thisMO=""
+thisId="allid"
+thisStruct=""
+proxyid="Proxy Id"
+datasitesrt="filesrt.log"
+session="closed"
+session_struct="closed"
+struct="^Struct.*has.*members.*"
+substruct=">>> Struct.*has.*members"
+notstruct="Struct"
+testmo='MO.*SubNetwork=ONRM_ROOT_MO_R,MeContext=CCL00932,ManagedElement=1'$
+dot="."
+totalmos="Total:.*MOs"
+structMOarray='^[a-zA-Z].*\[.*\]'
+bigthan=">>>" 
+
+thisStruct=""
+hasStruct=""
+thissubStruct=""
+subparam=""
+
+## processing sign
+drawline "extracting KGET : ${eNBName}"
+#--------------------------------------
+
+IFS=$'\n' read -d '' -r -a array < "$filename"
+length="${#array[@]}"
+## printf "%s\n" "${#array[@]}"
+## printf "%s\n" "${array[$length-1]}"
+
+for (( i=1; i<${length}+1; i++ )); do
+line=${array[$i-1]}
+## echo "$line"
+		 ## if [[ $line =~ $testmo ]] ; then
+		 if [[ $line =~ $foundmo ]] ; then
+		 		IFS=" " read -a moarray <<< "$line"
+		 		## echo "$line"
+		 		## echo "${moarray[1]}"
+		 		thisMO="${moarray[1]}"
+		 		## printf '\e[1;34m%s\n\e[0m' "${moarray[1]}"
+		 		
+		 		## exit 1
+		 		until [[ $line =~ $proxyid ]]; do
+		 		
+		 				(( i++ ))
+		 				line=${array[$i-1]}
+		 				
+		 				if [[ $line =~ $proxyid || $line =~ $totalmos ]] ; then
+		 					thisStruct=""
+		 					hasStruct=""
+		 					thissubStruct=""
+		 					subparam=""
+		 					## echo "proxy id"
+		 					## exit 1
+		 					break
+		 				elif [[ $line =~ "============================" ]] ; then
+		 					:
+		 				elif [[ $line =~ $foundid ]] ; then
+ 							IFS=" " read -a idarray <<< "$line"
+ 							thisId="${idarray[0]}"
+ 							echo "${thisMO}#${line}" >> "${DIRECTORY}/${thisId}"
+ 							## echo "${thisMO} ${line}"
+ 							if [[ $view ]] ; then
+ 								printf '%s\t\e[1;33m%s\n\e[0m' "${thisMO}" "${line}"
+ 							fi
+ 							## echo "found id"
+		 				elif [[ $line =~ $struct ]] ; then
+		 					IFS=" " read -a structarray <<< "$line"
+		 					thisStruct="${structarray[1]}"
+		 					hasStruct="${structarray[3]}"
+		 					## echo "struct"
+							## echo "$thisStruct"
+							## echo "$hasStruct"
+		 					for (( p=1; p<${hasStruct}+1; p++ )) ; do
+		 						(( i++ ))
+		 						line=${array[$i-1]}
+		 						IFS="." read -a substructarray <<< "$line"
+		 						subparam="${substructarray[1]}"
+		 						printf '%s#%s.%s\n' "${thisMO}" "$thisStruct" "${subparam}" >> "${DIRECTORY}/${thisId}"
+		 						
+		 						if [[ $view ]] ; then
+		 							printf '%s\t\e[1;33m%s\e[0m.\e[1;35m%s\n\e[0m' "${thisMO}" "$thisStruct" "${subparam}"
+		 						fi
+		 						
+		 					done
+		 					
+		 				elif [[ $line =~ $structMOarray ]] ; then
+		 				
+		 					thisStruct=""
+		 					hasStruct=""
+		 					thissubStruct=""
+		 					subparam=""
+		 					
+		 					IFS="\[" read -a structarray <<< "$line"
+		 					thisStruct="${structarray[0]}"
+		 					hasStruct="${structarray[1]}"
+		 					hasStruct="${hasStruct/\]/}"
+		 					printf '%s#%s\n' "${thisMO}" "${line}" >> "${DIRECTORY}/${thisId}"
+		 					
+		 					if [[ $view ]] ; then
+		 						printf '%s\t\e[1;33m%s\e[0m\n' "${thisMO}" "${line}"
+		 					fi
+		 					## echo "struct2"
+		 					(( i++ ))
+		 					
+		 					while [[ ${array[$i-1]} =~ $bigthan ]]; do
+		 					line="${array[$i-1]}"
+		 						if [[ $line =~ $substruct ]] ; then
+		 							IFS=" " read -a structarray <<< "$line"
+		 							thissubStruct="${structarray[1]}"
+		 							thissubStruct="${thissubStruct/"Struct"/}"
+		 							hasStruct="${structarray[3]}"
+		 							(( i++ ))
+		 						else
+		 							
+		 							if [[ $thissubStruct == "" ]] ; then
+		 							
+		 								printf '%s#%s\n' "${thisMO}" "$line" >> "${DIRECTORY}/${thisId}"
+		 								if [[ $view ]] ; then
+		 									printf '%s\t\e[1;35m%s\e[0m\n' "${thisMO}" "$line" ## "$thisStruct" "$thissubStruct" "${subparam}"
+		 								fi
+		 							else
+		 							
+		 								IFS="." read -a substructarray <<< "$line"
+		 								subparam="${substructarray[1]}"
+		 								## echo "$line"
+		 								printf '%s#%s%s.%s\n' "${thisMO}" "$thisStruct" "$thissubStruct" "${subparam}" >> "${DIRECTORY}/${thisId}"
+		 								if [[ $view ]] ; then
+		 									printf '%s\t\e[1;33m%s\e[0m\e[1;35m%s\e[0m.\e[1;35m%s\n\e[0m' "${thisMO}" "$thisStruct" "$thissubStruct" "${subparam}"
+		 								fi
+		 							fi
+		 							
+		 							(( i++ ))
+		 						fi
+		 						
+		 					done
+		 					
+		 					(( i-- )) 
+		 					
+		 				else
+		 				
+        		 	printf '%s#%s\n' "${thisMO}" "${line}"  >> "${DIRECTORY}/${thisId}"
+        		 	
+        		 	## if [[ $line =~ $datasitename ]] ; then
+        		 	## 		printf '%s#%s\n' "${thisMO}" "${line}"  >> "${DIRECTORY}/sitedataId"
+        		 	##elif [[ $line =~ "$datarbstype" ]]; then
+        		 	##		printf '%s#%s\n' "${thisMO}" "${line}"  >> "${DIRECTORY}/sitedataId"
+        		 	## fi
+        		 	
+        		 	if [[ $view ]] ; then		
+        		 		printf '%s\t\e[1;33m%s\n\e[0m' "${thisMO}" "${line}"
+        		 	fi
+        		 	## echo "$line"
+        		fi
+          
+        done	
+		 fi
+done
+
+## Getting site information
+## put it into SitedataId
+
+filename1="ManagedElementId"
+filename2="PfsId"
+filename3="SlotId"
+filename4="SynchronizationId"
+filename5="OptionalFeatureLicenseId"
+filename6="ENodeBFunctionId"
+
+export eDIR="${DIRECTORY}"
+
+## /home/dd622f/newSRT/elementextract ${filename1},${filename2},${filename3},${filename4},${filename5},${filename6}
+/home/ei400b/00_Tools/srt_lte/elementextract ${filename1},${filename2},${filename3},${filename4},${filename5},${filename6}
+
+## new blank line in last application
+## printf '\n\e[1;33m%s\n\e[0m' "Completed!"
+## drawline "Finish "
+
+
+exit 0
+
+# //////////////////////////////////////////////////////////////////////////////// #
+# Revision.History
+# v.1.0.0							-> Jan 20, 2015 Beta Version
+# v.1.0.3							-> Feb 13, 2015 adding eNBId (eNodeBFunctionId)
+# v.1.0.4							-> Feb 18, 2015 create folder located on filename's folder
+# //////////////////////////////////////////////////////////////////////////////// #
